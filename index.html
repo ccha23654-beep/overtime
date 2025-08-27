@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sistem Kiraan OT (Payroll-style)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://unpkg.com/html5-qrcode@2.3.11/html5-qrcode.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <style>
+    @media print {
+      body * { visibility: hidden; }
+      #print-area, #print-area * { visibility: visible; }
+      #print-area { position: absolute; left: 0; top: 0; width: 100%; }
+    }
+  </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+  <div class="max-w-6xl mx-auto p-4 sm:p-8">
+    <header class="flex items-center justify-between mb-6">
+      <h1 class="text-2xl sm:text-3xl font-bold">Sistem Kiraan OT</h1>
+      <div class="text-sm text-gray-500">Gaya Payroll • QR Scan • Print Slip • CSV</div>
+    </header>
+    <section class="grid gap-4 sm:grid-cols-3 mb-6">
+      <div class="bg-white rounded-2xl shadow p-4">
+        <h2 class="font-semibold mb-3">Kadar Asas & Multiplier</h2>
+        <label class="block text-sm mb-1">Kadar Asas Sejam (RM)</label>
+        <input id="baseRate" type="number" step="0.01" value="8.70" class="w-full rounded-xl border p-2 mb-2"/>
+        <div class="grid grid-cols-3 gap-2 text-sm">
+          <div>
+            <label class="block mb-1">6–9pm</label>
+            <input id="mul1" type="number" step="0.1" value="1.5" class="w-full rounded-xl border p-2"/>
+          </div>
+          <div>
+            <label class="block mb-1">9–12am</label>
+            <input id="mul2" type="number" step="0.1" value="2.0" class="w-full rounded-xl border p-2"/>
+          </div>
+          <div>
+            <label class="block mb-1">Cuti Umum</label>
+            <input id="mulPH" type="number" step="0.1" value="2.5" class="w-full rounded-xl border p-2"/>
+          </div>
+        </div>
+      </div>
+      <div class="bg-white rounded-2xl shadow p-4">
+        <h2 class="font-semibold mb-3">Pekerja</h2>
+        <label class="block text-sm mb-1">Pilih / Cari Nama</label>
+        <input id="searchWorker" placeholder="Cari nama…" class="w-full rounded-xl border p-2 mb-2" oninput="renderWorkerOptions()"/>
+        <select id="worker" class="w-full rounded-xl border p-2"></select>
+        <div class="flex gap-2 mt-3">
+          <button id="btnOpenScanner" class="flex items-center gap-2 rounded-xl px-3 py-2 bg-black text-white"><i data-lucide="scan-line"></i><span>Scan QR</span></button>
+          <button id="btnMakeQR" class="flex items-center gap-2 rounded-xl px-3 py-2 border"><i data-lucide="badge-percent"></i><span>QR Pekerja</span></button>
+        </div>
+      </div>
+      <div class="bg-white rounded-2xl shadow p-4">
+        <h2 class="font-semibold mb-3">Rekod OT (Hari Ini)</h2>
+        <label class="block text-sm mb-1">Tarikh</label>
+        <input id="date" type="date" class="w-full rounded-xl border p-2 mb-2"/>
+        <div class="grid grid-cols-3 gap-2 text-sm">
+          <div>
+            <label class="block mb-1">Jam 6–9</label>
+            <input id="h1" type="number" step="0.25" min="0" value="0" class="w-full rounded-xl border p-2"/>
+          </div>
+          <div>
+            <label class="block mb-1">Jam 9–12</label>
+            <input id="h2" type="number" step="0.25" min="0" value="0" class="w-full rounded-xl border p-2"/>
+          </div>
+          <div>
+            <label class="block mb-1">Jam Cuti Umum</label>
+            <input id="hph" type="number" step="0.25" min="0" value="0" class="w-full rounded-xl border p-2"/>
+          </div>
+        </div>
+        <button id="btnCalc" class="mt-3 w-full rounded-xl px-3 py-2 bg-emerald-600 text-white">Kira & Simpan</button>
+      </div>
+    </section>
+    <section class="grid md:grid-cols-2 gap-4">
+      <div class="bg-white rounded-2xl shadow p-4" id="print-area">
+        <div class="flex items-start justify-between">
+          <div>
+            <h3 class="text-lg font-semibold">Slip OT</h3>
+            <p class="text-xs text-gray-500">Gaya payroll — OT sahaja</p>
+          </div>
+          <div class="text-right text-sm">
+            <div id="slipDate">Tarikh: -</div>
+            <div id="slipName">Pekerja: -</div>
+          </div>
+        </div>
+        <hr class="my-3"/>
+        <div class="space-y-2 text-sm">
+          <div class="flex justify-between"><span>6–9pm</span><span id="line16">0 jam × RM0.00 = RM0.00</span></div>
+          <div class="flex justify-between"><span>9–12am</span><span id="line17">0 jam × RM0.00 = RM0.00</span></div>
+          <div class="flex justify-between"><span>Cuti Umum</span><span id="linePH">0 jam × RM0.00 = RM0.00</span></div>
+        </div>
+        <hr class="my-3"/>
+        <div class="flex justify-between text-base font-semibold">
+          <span>Jumlah Bayaran OT</span>
+          <span id="totalRM">RM0.00</span>
+        </div>
+      </div>
+      <div class="bg-white rounded-2xl shadow p-4">
+        <h3 class="text-lg font-semibold mb-3">Tindakan</h3>
+        <div class="flex flex-wrap gap-2">
+          <button id="btnPrint" class="rounded-xl px-4 py-2 border">Print Slip</button>
+          <button id="btnExport" class="rounded-xl px-4 py-2 border">Export CSV</button>
+          <button id="btnClear" class="rounded-xl px-4 py-2 border">Reset</button>
+        </div>
+        <h4 class="mt-6 font-semibold">Rekod Terkini</h4>
+        <div class="overflow-auto">
+          <table class="min-w-full text-sm mt-2" id="tbl">
+            <thead>
+              <tr class="bg-gray-100">
+                <th class="text-left p-2">Tarikh</th>
+                <th class="text-left p-2">Nama</th>
+                <th class="text-right p-2">Jam 6–9</th>
+                <th class="text-right p-2">Jam 9–12</th>
+                <th class="text-right p-2">Jam PH</th>
+                <th class="text-right p-2">Jumlah (RM)</th>
+              </tr>
+            </thead>
+            <tbody id="tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+    <div id="scannerModal" class="fixed inset-0 bg-black/60 hidden items-center justify-center p-4">
+      <div class="bg-white rounded-2xl shadow p-4 w-full max-w-md">
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="font-semibold">Scan QR Pekerja</h3>
+          <button id="btnCloseScanner" class="p-1">✕</button>
+        </div>
+        <div id="reader" class="rounded-xl overflow-hidden"></div>
+        <p class="text-xs text-gray-500 mt-2">Benarkan kamera. Halakan ke QR nama pekerja.</p>
+      </div>
+    </div>
+    <div id="qrModal" class="fixed inset-0 bg-black/60 hidden items-center justify-center p-4">
+      <div class="bg-white rounded-2xl shadow p-4 w-full max-w-sm">
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="font-semibold">QR Pekerja</h3>
+          <button id="btnCloseQR" class="p-1">✕</button>
+        </div>
+        <div id="qrBox" class="flex items-center justify-center p-4 border rounded-xl"></div>
+        <p class="text-xs text-gray-500 mt-2">Print / Simpan QR ini untuk digunakan semasa rekod OT.</p>
+      </div>
+    </div>
+  </div>
+  <script>
+    let workers = [
+      { id: "W001", name: "Muhammad Rasidi Bin Baharin" },
+      { id: "W002", name: "Muhammad Azzam Iqbal" },
+      { id: "W003", name: "Amira Najwa Binti Ahmad Hanazir" },
+      { id: "W004", name: "Nur ALeesya ALeeya " },
+    ];
+    const KEY = "ot-records-v1";
+    let records = JSON.parse(localStorage.getItem(KEY) || "[]");
+    const fmtRM = n => `RM${Number(n).toFixed(2)}`;
+    const byId = id => document.getElementById(id);
+    function renderWorkerOptions(){
+      const sel = byId('worker');
+      const q = (byId('searchWorker').value || '').toLowerCase();
+      sel.innerHTML = '';
+      workers
+        .filter(w => w.name.toLowerCase().includes(q))
+        .forEach(w => {
+          const opt = document.createElement('option');
+          opt.value = w.name; opt.textContent = w.name; sel.appendChild(opt);
+        });
+    }
+    function renderTable(){
+      const tb = byId('tbody');
+      tb.innerHTML = '';
+      records.forEach(r => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td class='p-2'>${r.date}</td>
+          <td class='p-2'>${r.name}</td>
+          <td class='p-2 text-right'>${r.h1}</td>
+          <td class='p-2 text-right'>${r.h2}</td>
+          <td class='p-2 text-right'>${r.hph}</td>
+          <td class='p-2 text-right'>${fmtRM(r.total)}</td>`;
+        tb.appendChild(tr);
+      });
+    }
+    function updateSlip(r){
+      byId('slipDate').textContent = `Tarikh: ${r.date}`;
+      byId('slipName').textContent = `Pekerja: ${r.name}`;
+      byId('line16').textContent = `${r.h1} jam × ${fmtRM(r.r16)} = ${fmtRM(r.p16)}`;
+      byId('line17').textContent = `${r.h2} jam × ${fmtRM(r.r17)} = ${fmtRM(r.p17)}`;
+      byId('linePH').textContent = `${r.hph} jam × ${fmtRM(r.rph)} = ${fmtRM(r.pph)}`;
+      byId('totalRM').textContent = fmtRM(r.total);
+    }
+    function calcAndSave(){
+      const base = parseFloat(byId('baseRate').value || '0');
+      const m1 = parseFloat(byId('mul1').value || '1.5');
+      const m2 = parseFloat(byId('mul2').value || '2.0');
+      const mph = parseFloat(byId('mulPH').value || '2.5');
+      const name = byId('worker').value;
+      const date = byId('date').value || new Date().toISOString().slice(0,10);
+      const h1 = parseFloat(byId('h1').value || '0');
+      const h2 = parseFloat(byId('h2').value || '0');
+      const hph = parseFloat(byId('hph').value || '0');
+      const r16 = base * m1;
+      const r17 = base * m2;
+      const rph = base * mph;
+      const p16 = h1 * r16;
+      const p17 = h2 * r17;
+      const pph = hph * rph;
+      const total = p16 + p17 + pph;
+      const rec = { date, name, h1, h2, hph, r16, r17, rph, p16, p17, pph, total };
+      updateSlip(rec);
+      records.push(rec);
+      localStorage.setItem(KEY, JSON.stringify(records));
+      renderTable();
+    }
+    function exportCSV(){
+      const headers = [
+        'Tarikh','Nama','Jam 6-9','Jam 9-12','Jam PH','Rate 6-9','Rate 9-12','Rate PH','Bayaran 6-9','Bayaran 9-12','Bayaran PH','Jumlah (RM)'
+      ];
+      const rows = records.map(r => [r.date,r.name,r.h1,r.h2,r.hph,r.r16,r.r17,r.rph,r.p16,r.p17,r.pph,r.total]);
+      const csv = [headers, ...rows].map(a=>a.join(',')).join('
+');
+      const blob = new Blob([csv], {type:'text/csv'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'rekod-ot.csv'; a.click();
+      URL.revokeObjectURL(url);
+    }
+    function resetForm(){
+      byId('h1').value = 0; byId('h2').value = 0; byId('hph').value = 0;
+      updateSlip({date:'-',name:'-',h1:0,h2:0,hph:0,r16:0,r17:0,rph:0,p16:0,p17:0,pph:0,total:0});
+    }
+    function init(){
+      byId('date').value = new Date().toISOString().slice(0,10);
+      renderWorkerOptions();
+      renderTable();
+      resetForm();
+      byId('btnCalc').onclick = calcAndSave;
+      byId('btnExport').onclick = exportCSV;
+      byId('btnClear').onclick = () => { records = []; localStorage.removeItem(KEY); renderTable(); };
+      byId('btnPrint').onclick = () => window.print();
+      const modal = byId('scannerModal');
+      const btnOpen = byId('btnOpenScanner');
+      const btnClose = byId('btnCloseScanner');
+      let scanner;
+      btnOpen.onclick = async () => {
+        modal.classList.remove('hidden');
+        scanner = new Html5Qrcode("reader");
+        const cams = await Html5Qrcode.getCameras();
+        let camId = cams?.[0]?.id;
+        scanner.start(
+          camId,
+          { fps: 10, qrbox: { width: 250, height: 250 } },
+          (decoded) => {
+            const hit = workers.find(w => w.name === decoded || w.id === decoded);
+            if (hit) {
+              byId('worker').value = hit.name; renderWorkerOptions();
+              byId('worker').value = hit.name;
+            } else {
+              if (decoded?.trim()) {
+                const newName = decoded.trim();
+                const newId = `W${String(workers.length+1).padStart(3,'0')}`;
+                workers.push({id:newId, name:newName});
+                renderWorkerOptions();
+                byId('worker').value = newName;
+              }
+            }
+            stopScanner();
+          },
+          (err) => { }
+        );
+      };
+      function stopScanner(){
+        if (scanner) { scanner.stop().then(()=>scanner.clear()); }
+        modal.classList.add('hidden');
+      }
+      btnClose.onclick = stopScanner;
+      const qrModal = byId('qrModal');
+      byId('btnMakeQR').onclick = () => {
+        qrModal.classList.remove('hidden');
+        const name = byId('worker').value || workers[0].name;
+        const box = byId('qrBox');
+        box.innerHTML = '';
+        new QRCode(box, { text: name, width: 220, height: 220 });
+      };
+      byId('btnCloseQR').onclick = () => qrModal.classList.add('hidden');
+      lucide.createIcons();
+    }
+    document.addEventListener('DOMContentLoaded', init);
+  </script>
+</body>
+</html>
